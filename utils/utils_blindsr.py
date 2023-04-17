@@ -417,6 +417,26 @@ def add_JPEG_noise(img):
     return img
 
 
+def get_center_crop_coords(height, width, crop_height, crop_width):
+    y1 = (height - crop_height) // 2
+    y2 = y1 + crop_height
+    x1 = (width - crop_width) // 2
+    x2 = x1 + crop_width
+    return x1, y1, x2, y2
+
+
+def center_crop(lq, hq, sf=4, lq_patchsize=64):
+    # center crop on the LQ image
+    lq_h, lq_w = lq.shape[:2]
+    lq_x1, lq_y1, lq_x2, lq_y2 = get_center_crop_coords(lq_h, lq_w, lq_patchsize, lq_patchsize)
+    lq = lq[lq_y1:lq_y2, lq_x1:lq_x2]
+    # center crop on the HQ image
+    hq_h, hq_w = hq.shape[:2]
+    hq_x1, hq_y1, hq_x2, hq_y2 = get_center_crop_coords(hq_h, hq_w, int(lq_patchsize * sf), int(lq_patchsize * sf))
+    hq = hq[hq_y1:hq_y2, hq_x1:hq_x2]
+    return lq, hq
+
+
 def random_crop(lq, hq, sf=4, lq_patchsize=64):
     h, w = lq.shape[:2]
     rnd_h = random.randint(0, h - lq_patchsize)
@@ -428,7 +448,7 @@ def random_crop(lq, hq, sf=4, lq_patchsize=64):
     return lq, hq
 
 
-def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
+def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None, use_center_crop=False):
     """
     This is the degradation model of BSRGAN from the paper
     "Designing a Practical Degradation Model for Deep Blind Image Super-Resolution"
@@ -514,13 +534,15 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     # add final JPEG compression noise
     img = add_JPEG_noise(img)
 
-    # random crop
-    img, hq = random_crop(img, hq, sf_ori, lq_patchsize)
+    # pick a crop function based on the given parameter and apply it
+    crop_fn = center_crop if use_center_crop else random_crop
+    img, hq = crop_fn(img, hq, sf_ori, lq_patchsize)
 
     return img, hq
 
 
-def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=True, lq_patchsize=64, isp_model=None):
+def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=True, lq_patchsize=64, isp_model=None,
+                            use_center_crop=False):
     """
     This is an extended degradation model by combining
     the degradation models of BSRGAN and Real-ESRGAN
@@ -602,8 +624,9 @@ def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=True, lq_patc
     # add final JPEG compression noise
     img = add_JPEG_noise(img)
 
-    # random crop
-    img, hq = random_crop(img, hq, sf, lq_patchsize)
+    # pick a crop function based on the given parameter and apply it
+    crop_fn = center_crop if use_center_crop else random_crop
+    img, hq = crop_fn(img, hq, sf, lq_patchsize)
 
     return img, hq
 
